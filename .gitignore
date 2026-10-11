@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+
+# База данных — бэкапим отдельно, не через git
+*.db
+*.sqlite
+*.sqlite3
+
+# Бэкапы и архивы
+*.zip
+*.7z
+*.rar
+*.bak
+
+# Настройки IDE
+.vscode/
+.idea/
+*.swp
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# Логи и временные файлы
+*.log
+*.tmp
