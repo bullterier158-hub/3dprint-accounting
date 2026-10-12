@@ -122,3 +122,5 @@ CREATE TABLE IF NOT EXISTS "Цены на филамент у поставщик
 	FOREIGN KEY("Вид пластика id") REFERENCES "Виды пластика"("id")
 );
 COMMIT;
+
+
