@@ -77,6 +77,24 @@ class PrintCostApp:
                     row["type"].current(0)
                 else:
                     row["type"].set("")
+        self.load_nozzles_into_combo()
+
+    def load_nozzles_into_combo(self):
+        """Заполняет выпадающий список сопел в калькуляторе."""
+        nozzles = self.db.get_all_nozzles()
+        self.nozzle_list = [n for n in nozzles if n["Статус"] == "В работе"]
+        # Формируем отображаемые строки: "ID #N — Тип (остаток г)"
+        display = []
+        for n in self.nozzle_list:
+            остаток = n["Остаток"] or 0
+            display.append(f"#{n['id']} — {n['Тип']} (остаток {остаток:.0f} г)")
+        self.combo_nozzle["values"] = display
+
+        if display:
+            # По умолчанию первое (с минимальным остатком, они уже отсортированы)
+            self.combo_nozzle.current(0)
+        else:
+            self.combo_nozzle.set("")
 
     # ============================================================
     # ВКЛАДКА 1: КАЛЬКУЛЯТОР
@@ -100,7 +118,35 @@ class PrintCostApp:
         self.entry_tariff.insert(0, f"{self.db.get_electricity_tariff():.2f}")
 
         ttk.Button(frm_params, text="💾 Сохранить тариф",
-                   command=self.save_tariff).grid(row=0, column=6, padx=10)
+                command=self.save_tariff).grid(row=0, column=6, padx=10)
+
+        # ==== Вторая строка параметров ====
+        ttk.Label(frm_params, text="Стоимость принтера (руб):").grid(
+            row=1, column=0, sticky="w", pady=(8, 0))
+        self.entry_printer_cost = ttk.Entry(frm_params, width=10)
+        self.entry_printer_cost.grid(row=1, column=1, padx=5, pady=(8, 0))
+        self.entry_printer_cost.insert(0, f"{self.db.get_printer_cost():.2f}")
+
+        ttk.Label(frm_params, text="Часы до кап. ремонта:").grid(
+            row=1, column=2, sticky="w", padx=(20, 0), pady=(8, 0))
+        self.entry_printer_hours = ttk.Entry(frm_params, width=10)
+        self.entry_printer_hours.grid(row=1, column=3, padx=5, pady=(8, 0))
+        self.entry_printer_hours.insert(0, f"{self.db.get_printer_hours_to_overhaul():.0f}")
+
+        ttk.Button(frm_params, text="💾 Сохранить",
+                command=self.save_printer_params).grid(row=1, column=4, padx=10, pady=(8, 0))
+
+        # ==== Третья строка: сопло и брак ====
+        ttk.Label(frm_params, text="Активное сопло:").grid(
+            row=2, column=0, sticky="w", pady=(8, 0))
+        self.combo_nozzle = ttk.Combobox(frm_params, width=30, state="readonly")
+        self.combo_nozzle.grid(row=2, column=1, columnspan=2, padx=5, pady=(8, 0), sticky="w")
+
+        ttk.Label(frm_params, text="Брак (%):").grid(
+            row=2, column=3, sticky="w", padx=(20, 0), pady=(8, 0))
+        self.entry_defect = ttk.Entry(frm_params, width=10)
+        self.entry_defect.grid(row=2, column=4, padx=5, pady=(8, 0), sticky="w")
+        self.entry_defect.insert(0, "10")
 
         frm_table = ttk.LabelFrame(self.tab_calc, text="Необходимый пластик", padding=10)
         frm_table.pack(fill="both", expand=True, padx=10, pady=5)
@@ -146,6 +192,17 @@ class PrintCostApp:
                 messagebox.showerror("Ошибка", "Не удалось сохранить.")
         except ValueError:
             messagebox.showerror("Ошибка", "Тариф должен быть числом.")
+
+    def save_printer_params(self):
+        try:
+            cost = float(self.entry_printer_cost.get().replace(",", "."))
+            hours = float(self.entry_printer_hours.get().replace(",", "."))
+            if self.db.update_printer_params(cost, hours):
+                messagebox.showinfo("OK", "Параметры принтера сохранены.")
+            else:
+                messagebox.showerror("Ошибка", "Не удалось сохранить.")
+        except ValueError:
+            messagebox.showerror("Ошибка", "Стоимость и часы — числа.")
 
     def add_calc_row(self):
         row_idx = self.calc_rows_start_row + len(self.calc_rows)
@@ -205,20 +262,44 @@ class PrintCostApp:
         self.add_calc_row()
 
     def calculate(self):
+        # ==== Читаем параметры ====
         try:
             watts = float(self.entry_watts.get().replace(",", "."))
             hours = float(self.entry_hours.get().replace(",", "."))
             tariff = float(self.entry_tariff.get().replace(",", "."))
+            printer_cost = float(self.entry_printer_cost.get().replace(",", "."))
+            printer_hours = float(self.entry_printer_hours.get().replace(",", "."))
+            defect_pct = float(self.entry_defect.get().replace(",", "."))
         except ValueError:
-            messagebox.showerror("Ошибка", "Мощность, время и тариф — числа.")
+            messagebox.showerror("Ошибка", "Проверь числа в параметрах.")
             return
 
+        # ==== Электричество ====
         cost_electricity = (watts / 1000.0) * hours * tariff
+
+        # ==== Принтер ====
+        if printer_hours > 0:
+            cost_printer = hours * (printer_cost / printer_hours)
+        else:
+            cost_printer = 0.0
+
+        # ==== Какое сопло используем ====
+        nozzle_id = None
+        nozzle_label = "—"
+        if self.combo_nozzle.get() and self.nozzle_list:
+            try:
+                idx = self.combo_nozzle.current()
+                if idx >= 0:
+                    nozzle_id = self.nozzle_list[idx]["id"]
+                    nozzle_label = f"#{nozzle_id} ({self.nozzle_list[idx]['Тип']})"
+            except Exception:
+                pass
 
         self.text_result.delete("1.0", tk.END)
         self.text_result.insert(tk.END, "=== РАСЧЁТ СЕБЕСТОИМОСТИ ===\n\n")
 
         total_plastic_cost = 0.0
+        total_nozzle_cost = 0.0
         total_market_cost = 0.0
         problems = []
 
@@ -246,6 +327,7 @@ class PrintCostApp:
                 problems.append(f"[{i}] {type_name}: вид пластика отсутствует в БД")
                 continue
 
+            # ==== Пластик ====
             spools = self.db.find_spools_by_type_color(plastic_id, color)
             remaining = need_grams
             cost_row = 0.0
@@ -272,12 +354,12 @@ class PrintCostApp:
                     f"{take:.1f} г × {ppg:.4f} ₽/г = {part:.2f} ₽\n",
                 )
 
+            # ==== Поставщики (если не хватает) ====
             if remaining > 0:
                 self.text_result.insert(
                     tk.END, f"    ⚠️ Не хватает {remaining:.1f} г на складе. Ищу у поставщиков...\n"
                 )
                 suppliers = self.db.find_supplier_prices(plastic_id, color)
-
                 total_suppliers = len(suppliers)
                 with_weight = []
                 for s in suppliers:
@@ -336,6 +418,19 @@ class PrintCostApp:
                 self.text_result.insert(tk.END, "\n")
                 continue
 
+            # ==== Амортизация сопла (для этой позиции) ====
+            if nozzle_id:
+                nozzle_cost = self.db.calculate_nozzle_cost(
+                    nozzle_id, plastic_id, need_grams
+                )
+                if nozzle_cost > 0:
+                    total_nozzle_cost += nozzle_cost
+                    self.text_result.insert(
+                        tk.END,
+                        f"    🔩 Амортизация сопла: {nozzle_cost:.2f} ₽\n"
+                    )
+
+            # ==== Рыночная стоимость ====
             type_info = self.db.get_plastic_type_info(plastic_id)
             market_ppg = float(type_info["Рыночная стоимость (руб./г)"] or 0) if type_info else 0.0
             if market_ppg > 0:
@@ -351,11 +446,29 @@ class PrintCostApp:
             total_plastic_cost += cost_row
             self.text_result.insert(tk.END, "\n")
 
-        total = cost_electricity + total_plastic_cost
+        # ==== Подытог ====
+        subtotal = (total_plastic_cost + cost_electricity
+                    + total_nozzle_cost + cost_printer)
+        # ==== Накрутка на брак ====
+        defect_multiplier = 1.0 + (defect_pct / 100.0)
+        total = subtotal * defect_multiplier
+        cost_defect = total - subtotal
+
+        # ==== Вывод ====
         self.text_result.insert(tk.END, "=" * 60 + "\n")
-        self.text_result.insert(tk.END, f"Электричество:             {cost_electricity:>8.2f} ₽\n")
         self.text_result.insert(tk.END, f"Пластик (себестоимость):   {total_plastic_cost:>8.2f} ₽\n")
+        self.text_result.insert(tk.END, f"Электричество:             {cost_electricity:>8.2f} ₽\n")
+        if nozzle_id:
+            self.text_result.insert(tk.END, f"Амортизация сопла:         {total_nozzle_cost:>8.2f} ₽   (сопло {nozzle_label})\n")
+        if cost_printer > 0:
+            self.text_result.insert(tk.END, f"Амортизация принтера:      {cost_printer:>8.2f} ₽\n")
         self.text_result.insert(tk.END, "-" * 60 + "\n")
+        self.text_result.insert(tk.END, f"Подытог:                   {subtotal:>8.2f} ₽\n")
+        self.text_result.insert(
+            tk.END,
+            f"Брак ({defect_pct:.1f}%):              +{cost_defect:>7.2f} ₽\n"
+        )
+        self.text_result.insert(tk.END, "=" * 60 + "\n")
 
         if problems:
             self.text_result.insert(
