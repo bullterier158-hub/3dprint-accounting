@@ -34,12 +34,14 @@ class PrintCostApp:
         self.tab_projects = ttk.Frame(self.notebook)
         self.tab_types = ttk.Frame(self.notebook)
         self.tab_nozzle_types = ttk.Frame(self.notebook)
+        self.tab_nozzles = ttk.Frame(self.notebook)
 
         self.notebook.add(self.tab_calc, text="🧮 Калькулятор")
         self.notebook.add(self.tab_stock, text="📦 Склад")
         self.notebook.add(self.tab_projects, text="📋 Проекты")
         self.notebook.add(self.tab_types, text="🎨 Виды пластика")
         self.notebook.add(self.tab_nozzle_types, text="🔧 Типы сопел")
+        self.notebook.add(self.tab_nozzles, text="🔩 Сопла")
 
         # ==== Построение UI вкладок ====
         self.build_calc_tab()
@@ -47,6 +49,7 @@ class PrintCostApp:
         self.build_projects_tab()
         self.build_types_tab()
         self.build_nozzle_types_tab()
+        self.build_nozzles_tab()
 
         # ==== Первичная загрузка данных ====
         self.refresh_all()
@@ -60,6 +63,7 @@ class PrintCostApp:
         self.load_projects()
         self.load_types_data()
         self.load_nozzle_types_data()
+        self.load_nozzles_data()
 
     def load_plastic_types(self):
         types = self.db.get_all_plastic_types()
@@ -958,6 +962,225 @@ class PrintCostApp:
         else:
             messagebox.showerror("Ошибка", "Тип используется в таблице Сопла.")
 
+    # ============================================================
+    # ВКЛАДКА 6: СОПЛА
+    # ============================================================
+    def build_nozzles_tab(self):
+        columns = ("ID", "Тип", "Материал", "Ø (мм)", "Серийный",
+                   "Стоимость", "Наработка (г)", "Ресурс (г)",
+                   "Остаток (г)", "Износ %", "Статус")
+        self.tree_nozzles = ttk.Treeview(
+            self.tab_nozzles, columns=columns, show="headings", height=18
+        )
+        widths = (40, 130, 90, 55, 110, 80, 100, 80, 90, 70, 90)
+        for col, w in zip(columns, widths):
+            self.tree_nozzles.heading(col, text=col)
+            self.tree_nozzles.column(col, width=w, anchor="center")
+
+        h_scroll = ttk.Scrollbar(self.tab_nozzles, orient="horizontal",
+                                 command=self.tree_nozzles.xview)
+        self.tree_nozzles.configure(xscrollcommand=h_scroll.set)
+
+        self.tree_nozzles.pack(fill="both", expand=True, padx=10, pady=(10, 0))
+        h_scroll.pack(fill="x", padx=10)
+
+        frm_btns = ttk.Frame(self.tab_nozzles)
+        frm_btns.pack(fill="x", padx=10, pady=5)
+        ttk.Button(frm_btns, text="➕ Добавить сопло",
+                   command=self.add_nozzle_dialog).pack(side="left", padx=5)
+        ttk.Button(frm_btns, text="✏ Изменить",
+                   command=self.edit_nozzle_dialog).pack(side="left", padx=5)
+        ttk.Button(frm_btns, text="🗑 Удалить",
+                   command=self.delete_selected_nozzle).pack(side="left", padx=5)
+        ttk.Button(frm_btns, text="🔄 Обновить",
+                   command=self.load_nozzles_data).pack(side="left", padx=5)
+
+    def load_nozzles_data(self):
+        for i in self.tree_nozzles.get_children():
+            self.tree_nozzles.delete(i)
+        for n in self.db.get_all_nozzles():
+            resource = n["Ресурс"] or 0
+            wear = n["Наработка (г)"] or 0
+            остаток = n["Остаток"] or 0
+            if resource > 0:
+                wear_pct = (wear / resource) * 100
+            else:
+                wear_pct = 0.0
+            self.tree_nozzles.insert("", "end", iid=str(n["id"]), values=(
+                n["id"],
+                n["Тип"],
+                n["Материал"] or "",
+                f"{n['Диаметр']:.2f}" if n["Диаметр"] is not None else "",
+                n["Серийный номер"] or "",
+                f"{n['Стоимость (руб)']:.2f}",
+                f"{wear:.1f}",
+                f"{resource:.0f}",
+                f"{остаток:.1f}",
+                f"{wear_pct:.1f}%",
+                n["Статус"] or "",
+            ))
+
+    def add_nozzle_dialog(self):
+        # Проверяем, есть ли вообще типы сопел
+        types = self.db.get_all_nozzle_types()
+        if not types:
+            messagebox.showerror(
+                "Ошибка",
+                "Сначала добавь хотя бы один тип сопла (вкладка «🔧 Типы сопел»)."
+            )
+            return
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Добавить сопло")
+        dialog.geometry("400x420")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        ttk.Label(dialog, text="Тип сопла:").pack(pady=(10, 2))
+        type_names = [t["Название"] for t in types]
+        combo_type = ttk.Combobox(dialog, values=type_names, state="readonly", width=35)
+        combo_type.pack()
+        combo_type.current(0)
+
+        ttk.Label(dialog, text="Серийный номер (опционально):").pack(pady=(10, 2))
+        entry_serial = ttk.Entry(dialog, width=38)
+        entry_serial.pack()
+
+        ttk.Label(dialog, text="Стоимость сопла (руб.):").pack(pady=(10, 2))
+        entry_cost = ttk.Entry(dialog, width=38)
+        entry_cost.pack()
+
+        ttk.Label(dialog, text="Дата покупки (ГГГГ-ММ-ДД, опционально):").pack(pady=(10, 2))
+        entry_date = ttk.Entry(dialog, width=38)
+        entry_date.pack()
+
+        ttk.Label(dialog, text="Заметки:").pack(pady=(10, 2))
+        entry_notes = ttk.Entry(dialog, width=38)
+        entry_notes.pack()
+
+        def save():
+            try:
+                type_name = combo_type.get()
+                type_id = next(t["id"] for t in types if t["Название"] == type_name)
+                serial = entry_serial.get().strip()
+                cost = float(entry_cost.get().replace(",", "."))
+                purchase_date = entry_date.get().strip() or None
+                notes = entry_notes.get().strip()
+
+                if self.db.add_nozzle(type_id, serial, cost, purchase_date, notes):
+                    messagebox.showinfo("OK", "Сопло добавлено.")
+                    dialog.destroy()
+                    self.load_nozzles_data()
+                else:
+                    messagebox.showerror("Ошибка", "Не удалось добавить.")
+            except ValueError:
+                messagebox.showerror("Ошибка", "Стоимость — число.")
+            except StopIteration:
+                messagebox.showerror("Ошибка", "Выбери тип сопла.")
+
+        ttk.Button(dialog, text="💾 Сохранить", command=save).pack(pady=20)
+
+    def edit_nozzle_dialog(self):
+        sel = self.tree_nozzles.selection()
+        if not sel:
+            messagebox.showinfo("Инфо", "Выбери сопло в таблице.")
+            return
+        nozzle_id = int(sel[0])
+
+        current = self.db.get_nozzle_info(nozzle_id)
+        if not current:
+            return
+
+        types = self.db.get_all_nozzle_types()
+        if not types:
+            return
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title(f"Сопло #{nozzle_id}")
+        dialog.geometry("400x480")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        ttk.Label(dialog, text="Тип сопла:").pack(pady=(10, 2))
+        type_names = [t["Название"] for t in types]
+        combo_type = ttk.Combobox(dialog, values=type_names, state="readonly", width=35)
+        combo_type.pack()
+        # Устанавливаем текущий тип
+        current_type_name = current["Тип"]
+        if current_type_name in type_names:
+            combo_type.set(current_type_name)
+
+        ttk.Label(dialog, text="Серийный номер:").pack(pady=(10, 2))
+        entry_serial = ttk.Entry(dialog, width=38)
+        entry_serial.pack()
+        entry_serial.insert(0, current["Серийный номер"] or "")
+
+        ttk.Label(dialog, text="Стоимость сопла (руб.):").pack(pady=(10, 2))
+        entry_cost = ttk.Entry(dialog, width=38)
+        entry_cost.pack()
+        entry_cost.insert(0, f"{current['Стоимость (руб)']:.2f}")
+
+        ttk.Label(dialog, text="Статус:").pack(pady=(10, 2))
+        combo_status = ttk.Combobox(
+            dialog, values=["В работе", "В запасе", "Изношено", "Сломано"],
+            state="readonly", width=35
+        )
+        combo_status.pack()
+        combo_status.set(current["Статус"] or "В работе")
+
+        ttk.Label(dialog, text="Наработка (г, эффективная):").pack(pady=(10, 2))
+        entry_wear = ttk.Entry(dialog, width=38)
+        entry_wear.pack()
+        entry_wear.insert(0, f"{current['Наработка (г)'] or 0:.1f}")
+
+        ttk.Label(dialog, text="Заметки:").pack(pady=(10, 2))
+        entry_notes = ttk.Entry(dialog, width=38)
+        entry_notes.pack()
+        entry_notes.insert(0, current["Заметки"] or "")
+
+        def save():
+            try:
+                type_name = combo_type.get()
+                type_id = next(t["id"] for t in types if t["Название"] == type_name)
+                serial = entry_serial.get().strip()
+                cost = float(entry_cost.get().replace(",", "."))
+                status = combo_status.get()
+                wear = float(entry_wear.get().replace(",", "."))
+                notes = entry_notes.get().strip()
+
+                # Обновляем через update_nozzle (тип, серийник, стоимость, статус)
+                ok1 = self.db.update_nozzle(
+                    nozzle_id, type_id, serial, cost, status, notes
+                )
+                # Наработку обновляем отдельно (чтобы не терять другое)
+                ok2 = self.db.execute_commit(
+                    'UPDATE "Сопла" SET "Наработка (г)" = ? WHERE "id" = ?',
+                    (wear, nozzle_id)
+                )
+
+                if ok1 and ok2:
+                    dialog.destroy()
+                    self.load_nozzles_data()
+                else:
+                    messagebox.showerror("Ошибка", "Не удалось сохранить.")
+            except ValueError:
+                messagebox.showerror("Ошибка", "Стоимость и наработка — числа.")
+            except StopIteration:
+                messagebox.showerror("Ошибка", "Выбери тип сопла.")
+
+        ttk.Button(dialog, text="💾 Сохранить", command=save).pack(pady=20)
+
+    def delete_selected_nozzle(self):
+        sel = self.tree_nozzles.selection()
+        if not sel:
+            return
+        nozzle_id = int(sel[0])
+        if not messagebox.askyesno("Удалить?", f"Удалить сопло #{nozzle_id}?"):
+            return
+        if self.db.delete_nozzle(nozzle_id):
+            self.load_nozzles_data()
+        else:
+            messagebox.showerror("Ошибка", "Возможно, сопло используется в истории печати.")
 
 if __name__ == "__main__":
     root = tk.Tk()
