@@ -1,19 +1,16 @@
 # main.py
-# Версия: v1.0 (baseline)
-# Дата: финальная версия после серии правок (выравнивание заголовков,
-#        обработка невалидных позиций, двойные кавычки в SQL, убрана Марка
-#        из калькулятора и "Наша стоимость" из справочника пластиков).
+# Версия: v1.1 — добавлена вкладка "Типы сопел"
 import tkinter as tk
 from tkinter import ttk, messagebox
 from db_manager import DatabaseManager
 
-DB_PATH = r"JobData.db"  # ЗАМЕНИ на свой путь
+DB_PATH = r"JobData.db"
 
 
 class PrintCostApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Учет 3D-печати и калькулятор себестоимости (v1.0)")
+        self.root.title("Учет 3D-печати и калькулятор себестоимости (v1.1)")
         self.root.geometry("1180x780")
 
         try:
@@ -23,29 +20,35 @@ class PrintCostApp:
             root.destroy()
             return
 
-        self.plastic_types = {}       # {Название: id}
+        self.plastic_types = {}
         self.plastic_type_names = []
-        self.calc_rows = []           # строки калькулятора
-        self.calc_rows_start_row = 1  # 0-я строка в grid занята заголовками
+        self.calc_rows = []
+        self.calc_rows_start_row = 1
 
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(fill="both", expand=True, padx=8, pady=8)
 
+        # ==== Вкладки ====
         self.tab_calc = ttk.Frame(self.notebook)
         self.tab_stock = ttk.Frame(self.notebook)
         self.tab_projects = ttk.Frame(self.notebook)
         self.tab_types = ttk.Frame(self.notebook)
+        self.tab_nozzle_types = ttk.Frame(self.notebook)
 
         self.notebook.add(self.tab_calc, text="🧮 Калькулятор")
         self.notebook.add(self.tab_stock, text="📦 Склад")
         self.notebook.add(self.tab_projects, text="📋 Проекты")
         self.notebook.add(self.tab_types, text="🎨 Виды пластика")
+        self.notebook.add(self.tab_nozzle_types, text="🔧 Типы сопел")
 
+        # ==== Построение UI вкладок ====
         self.build_calc_tab()
         self.build_stock_tab()
         self.build_projects_tab()
         self.build_types_tab()
+        self.build_nozzle_types_tab()
 
+        # ==== Первичная загрузка данных ====
         self.refresh_all()
 
     # ============================================================
@@ -56,6 +59,7 @@ class PrintCostApp:
         self.load_stock_data()
         self.load_projects()
         self.load_types_data()
+        self.load_nozzle_types_data()
 
     def load_plastic_types(self):
         types = self.db.get_all_plastic_types()
@@ -74,7 +78,6 @@ class PrintCostApp:
     # ВКЛАДКА 1: КАЛЬКУЛЯТОР
     # ============================================================
     def build_calc_tab(self):
-        # --- Параметры печати ---
         frm_params = ttk.LabelFrame(self.tab_calc, text="Параметры печати", padding=10)
         frm_params.pack(fill="x", padx=10, pady=5)
 
@@ -92,21 +95,19 @@ class PrintCostApp:
         self.entry_tariff.grid(row=0, column=5, padx=5)
         self.entry_tariff.insert(0, f"{self.db.get_electricity_tariff():.2f}")
 
-        ttk.Button(frm_params, text="💾 Сохранить тариф", command=self.save_tariff).grid(row=0, column=6, padx=10)
+        ttk.Button(frm_params, text="💾 Сохранить тариф",
+                   command=self.save_tariff).grid(row=0, column=6, padx=10)
 
-        # --- Таблица позиций ---
         frm_table = ttk.LabelFrame(self.tab_calc, text="Необходимый пластик", padding=10)
         frm_table.pack(fill="both", expand=True, padx=10, pady=5)
 
-        # Один общий фрейм для заголовков И строк — grid выровняет колонки
         self.calc_grid = ttk.Frame(frm_table)
         self.calc_grid.pack(fill="x", anchor="nw")
 
-        # Фиксированная ширина колонок
-        self.calc_grid.columnconfigure(0, minsize=180)  # Вид пластика
-        self.calc_grid.columnconfigure(1, minsize=180)  # Цвет
-        self.calc_grid.columnconfigure(2, minsize=100)  # Вес
-        self.calc_grid.columnconfigure(3, minsize=60)   # Кнопка
+        self.calc_grid.columnconfigure(0, minsize=180)
+        self.calc_grid.columnconfigure(1, minsize=180)
+        self.calc_grid.columnconfigure(2, minsize=100)
+        self.calc_grid.columnconfigure(3, minsize=60)
 
         headers = ["Вид пластика", "Цвет", "Вес (г)", "Действие"]
         for col, text in enumerate(headers):
@@ -114,17 +115,16 @@ class PrintCostApp:
                 row=0, column=col, padx=5, pady=(0, 8), sticky="w"
             )
 
-        # Кнопки строк
         frm_btns = ttk.Frame(frm_table)
         frm_btns.pack(fill="x", pady=(10, 0), anchor="w")
-        ttk.Button(frm_btns, text="➕ Добавить позицию", command=self.add_calc_row).pack(side="left", padx=5)
-        ttk.Button(frm_btns, text="🗑 Очистить", command=self.clear_calc_rows).pack(side="left", padx=5)
+        ttk.Button(frm_btns, text="➕ Добавить позицию",
+                   command=self.add_calc_row).pack(side="left", padx=5)
+        ttk.Button(frm_btns, text="🗑 Очистить",
+                   command=self.clear_calc_rows).pack(side="left", padx=5)
 
-        # --- Кнопка расчёта ---
         ttk.Button(self.tab_calc, text="🧮 РАССЧИТАТЬ СЕБЕСТОИМОСТЬ",
                    command=self.calculate).pack(pady=10)
 
-        # --- Результат ---
         frm_res = ttk.LabelFrame(self.tab_calc, text="Результат", padding=10)
         frm_res.pack(fill="both", expand=True, padx=10, pady=5)
         self.text_result = tk.Text(frm_res, height=12, bg="#f5f5f5",
@@ -186,7 +186,6 @@ class PrintCostApp:
             target[key].destroy()
         self.calc_rows.remove(target)
 
-        # Перенумеровываем оставшиеся строки, чтобы не было дырок в grid
         for idx, r in enumerate(self.calc_rows):
             new_row = self.calc_rows_start_row + idx
             r["type"].grid_configure(row=new_row)
@@ -243,7 +242,6 @@ class PrintCostApp:
                 problems.append(f"[{i}] {type_name}: вид пластика отсутствует в БД")
                 continue
 
-            # --- Поиск на складе ---
             spools = self.db.find_spools_by_type_color(plastic_id, color)
             remaining = need_grams
             cost_row = 0.0
@@ -270,7 +268,6 @@ class PrintCostApp:
                     f"{take:.1f} г × {ppg:.4f} ₽/г = {part:.2f} ₽\n",
                 )
 
-            # --- Добор у поставщиков ---
             if remaining > 0:
                 self.text_result.insert(
                     tk.END, f"    ⚠️ Не хватает {remaining:.1f} г на складе. Ищу у поставщиков...\n"
@@ -335,7 +332,6 @@ class PrintCostApp:
                 self.text_result.insert(tk.END, "\n")
                 continue
 
-            # --- Рыночная стоимость для сравнения (только для рассчитанных позиций) ---
             type_info = self.db.get_plastic_type_info(plastic_id)
             market_ppg = float(type_info["Рыночная стоимость (руб./г)"] or 0) if type_info else 0.0
             if market_ppg > 0:
@@ -351,7 +347,6 @@ class PrintCostApp:
             total_plastic_cost += cost_row
             self.text_result.insert(tk.END, "\n")
 
-        # ==================== ИТОГ ====================
         total = cost_electricity + total_plastic_cost
         self.text_result.insert(tk.END, "=" * 60 + "\n")
         self.text_result.insert(tk.END, f"Электричество:             {cost_electricity:>8.2f} ₽\n")
@@ -400,10 +395,14 @@ class PrintCostApp:
 
         frm_btns = ttk.Frame(self.tab_stock)
         frm_btns.pack(fill="x", padx=10, pady=5)
-        ttk.Button(frm_btns, text="➕ Добавить катушку", command=self.add_spool_dialog).pack(side="left", padx=5)
-        ttk.Button(frm_btns, text="✏ Изменить остаток", command=self.edit_stock_dialog).pack(side="left", padx=5)
-        ttk.Button(frm_btns, text="🗑 Удалить", command=self.delete_selected_spool).pack(side="left", padx=5)
-        ttk.Button(frm_btns, text="🔄 Обновить", command=self.load_stock_data).pack(side="left", padx=5)
+        ttk.Button(frm_btns, text="➕ Добавить катушку",
+                   command=self.add_spool_dialog).pack(side="left", padx=5)
+        ttk.Button(frm_btns, text="✏ Изменить остаток",
+                   command=self.edit_stock_dialog).pack(side="left", padx=5)
+        ttk.Button(frm_btns, text="🗑 Удалить",
+                   command=self.delete_selected_spool).pack(side="left", padx=5)
+        ttk.Button(frm_btns, text="🔄 Обновить",
+                   command=self.load_stock_data).pack(side="left", padx=5)
 
     def load_stock_data(self):
         for i in self.tree_stock.get_children():
@@ -538,10 +537,14 @@ class PrintCostApp:
 
         frm_btns = ttk.Frame(self.tab_projects)
         frm_btns.pack(fill="x", padx=10, pady=5)
-        ttk.Button(frm_btns, text="➕ Новый проект", command=self.add_project_dialog).pack(side="left", padx=5)
-        ttk.Button(frm_btns, text="💰 Задать цену", command=self.set_project_price_dialog).pack(side="left", padx=5)
-        ttk.Button(frm_btns, text="📜 История печати", command=self.show_project_history).pack(side="left", padx=5)
-        ttk.Button(frm_btns, text="🔄 Обновить", command=self.load_projects).pack(side="left", padx=5)
+        ttk.Button(frm_btns, text="➕ Новый проект",
+                   command=self.add_project_dialog).pack(side="left", padx=5)
+        ttk.Button(frm_btns, text="💰 Задать цену",
+                   command=self.set_project_price_dialog).pack(side="left", padx=5)
+        ttk.Button(frm_btns, text="📜 История печати",
+                   command=self.show_project_history).pack(side="left", padx=5)
+        ttk.Button(frm_btns, text="🔄 Обновить",
+                   command=self.load_projects).pack(side="left", padx=5)
 
     def load_projects(self):
         for i in self.tree_projects.get_children():
@@ -667,10 +670,14 @@ class PrintCostApp:
 
         frm_btns = ttk.Frame(self.tab_types)
         frm_btns.pack(fill="x", padx=10, pady=5)
-        ttk.Button(frm_btns, text="➕ Добавить", command=self.add_type_dialog).pack(side="left", padx=5)
-        ttk.Button(frm_btns, text="✏ Изменить", command=self.edit_type_dialog).pack(side="left", padx=5)
-        ttk.Button(frm_btns, text="🗑 Удалить", command=self.delete_selected_type).pack(side="left", padx=5)
-        ttk.Button(frm_btns, text="🔄 Обновить", command=self.load_types_data).pack(side="left", padx=5)
+        ttk.Button(frm_btns, text="➕ Добавить",
+                   command=self.add_type_dialog).pack(side="left", padx=5)
+        ttk.Button(frm_btns, text="✏ Изменить",
+                   command=self.edit_type_dialog).pack(side="left", padx=5)
+        ttk.Button(frm_btns, text="🗑 Удалить",
+                   command=self.delete_selected_type).pack(side="left", padx=5)
+        ttk.Button(frm_btns, text="🔄 Обновить",
+                   command=self.load_types_data).pack(side="left", padx=5)
 
     def load_types_data(self):
         for i in self.tree_types.get_children():
@@ -754,6 +761,202 @@ class PrintCostApp:
             self.refresh_all()
         else:
             messagebox.showerror("Ошибка", "Вид пластика используется в других таблицах.")
+
+    # ============================================================
+    # ВКЛАДКА 5: ТИПЫ СОПЕЛ
+    # ============================================================
+    def build_nozzle_types_tab(self):
+        columns = ("ID", "Название", "Материал", "Ø (мм)", "Ресурс (г)",
+                   "PLA", "PLA+", "PLA-CF", "PLA-GF",
+                   "PETG", "PETG+", "PETG-CF", "PETG-GF",
+                   "ABS", "ABS-CF", "ABS-GF",
+                   "ASA", "ASA-CF",
+                   "TPU 95A", "TPU 98A", "TPU 85A", "TPU 75D")
+        self.tree_nozzle_types = ttk.Treeview(
+            self.tab_nozzle_types, columns=columns, show="headings", height=18
+        )
+        widths = (40, 130, 90, 60, 80,
+                  45, 50, 55, 55,
+                  50, 55, 60, 60,
+                  45, 55, 55,
+                  45, 55,
+                  60, 60, 60, 60)
+        for col, w in zip(columns, widths):
+            self.tree_nozzle_types.heading(col, text=col)
+            self.tree_nozzle_types.column(col, width=w, anchor="center")
+
+        h_scroll = ttk.Scrollbar(self.tab_nozzle_types, orient="horizontal",
+                                 command=self.tree_nozzle_types.xview)
+        self.tree_nozzle_types.configure(xscrollcommand=h_scroll.set)
+
+        self.tree_nozzle_types.pack(fill="both", expand=True, padx=10, pady=(10, 0))
+        h_scroll.pack(fill="x", padx=10)
+
+        frm_btns = ttk.Frame(self.tab_nozzle_types)
+        frm_btns.pack(fill="x", padx=10, pady=5)
+        ttk.Button(frm_btns, text="➕ Добавить тип",
+                   command=self.add_nozzle_type_dialog).pack(side="left", padx=5)
+        ttk.Button(frm_btns, text="✏ Изменить",
+                   command=self.edit_nozzle_type_dialog).pack(side="left", padx=5)
+        ttk.Button(frm_btns, text="🗑 Удалить",
+                   command=self.delete_selected_nozzle_type).pack(side="left", padx=5)
+        ttk.Button(frm_btns, text="🔄 Обновить",
+                   command=self.load_nozzle_types_data).pack(side="left", padx=5)
+
+    def load_nozzle_types_data(self):
+        for i in self.tree_nozzle_types.get_children():
+            self.tree_nozzle_types.delete(i)
+        for t in self.db.get_all_nozzle_types():
+            self.tree_nozzle_types.insert("", "end", iid=str(t["id"]), values=(
+                t["id"],
+                t["Название"],
+                t["Материал"] or "",
+                f"{t['Диаметр (мм)']:.2f}" if t["Диаметр (мм)"] is not None else "",
+                f"{t['Ресурс (г)']:.0f}" if t["Ресурс (г)"] is not None else "",
+                f"{t['Коэф. износа PLA']:.2f}",
+                f"{t['Коэф. износа PLA+']:.2f}",
+                f"{t['Коэф. износа PLA-CF']:.2f}",
+                f"{t['Коэф. износа PLA-GF']:.2f}",
+                f"{t['Коэф. износа PETG']:.2f}",
+                f"{t['Коэф. износа PETG+']:.2f}",
+                f"{t['Коэф. износа PETG-CF']:.2f}",
+                f"{t['Коэф. износа PETG-GF']:.2f}",
+                f"{t['Коэф. износа ABS']:.2f}",
+                f"{t['Коэф. износа ABS-CF']:.2f}",
+                f"{t['Коэф. износа ABS-GF']:.2f}",
+                f"{t['Коэф. износа ASA']:.2f}",
+                f"{t['Коэф. износа ASA-CF']:.2f}",
+                f"{t['Коэф. износа TPU 95A']:.2f}",
+                f"{t['Коэф. износа TPU 98A']:.2f}",
+                f"{t['Коэф. износа TPU 85A']:.2f}",
+                f"{t['Коэф. износа TPU 75D']:.2f}",
+            ))
+
+    def add_nozzle_type_dialog(self):
+        self._nozzle_type_form(None)
+
+    def edit_nozzle_type_dialog(self):
+        sel = self.tree_nozzle_types.selection()
+        if not sel:
+            messagebox.showinfo("Инфо", "Выбери тип сопла.")
+            return
+        self._nozzle_type_form(int(sel[0]))
+
+    def _nozzle_type_form(self, type_id):
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Тип сопла" + (f" #{type_id}" if type_id else ""))
+        dialog.geometry("500x700")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        ttk.Label(dialog, text="Название:").pack(pady=(10, 2))
+        entry_name = ttk.Entry(dialog, width=40)
+        entry_name.pack()
+
+        ttk.Label(dialog, text="Материал:").pack(pady=(8, 2))
+        combo_material = ttk.Combobox(dialog, values=[
+            "Латунь", "Закалённая сталь", "Рубин", "Карбид", "Медь", "Другое"
+        ], width=38)
+        combo_material.pack()
+
+        ttk.Label(dialog, text="Диаметр (мм):").pack(pady=(8, 2))
+        entry_diameter = ttk.Entry(dialog, width=40)
+        entry_diameter.pack()
+
+        ttk.Label(dialog, text="Ресурс (г, для PLA):").pack(pady=(8, 2))
+        entry_resource = ttk.Entry(dialog, width=40)
+        entry_resource.pack()
+
+        ttk.Separator(dialog, orient="horizontal").pack(fill="x", pady=10)
+        ttk.Label(dialog, text="Коэффициенты износа:",
+                  font=("", 10, "bold")).pack(pady=(0, 8))
+
+        coeff_frame = ttk.Frame(dialog)
+        coeff_frame.pack(fill="x", padx=20)
+
+        coeff_labels = [
+            "PLA", "PLA+", "PLA-CF", "PLA-GF",
+            "PETG", "PETG+", "PETG-CF", "PETG-GF",
+            "ABS", "ABS-CF", "ABS-GF",
+            "ASA", "ASA-CF",
+            "TPU 95A", "TPU 98A", "TPU 85A", "TPU 75D",
+        ]
+        coeff_defaults = [1.0, 1.0, 5.0, 5.0, 1.0, 1.0, 5.0, 5.0,
+                          1.2, 6.0, 6.0, 1.3, 6.0, 0.8, 0.8, 0.7, 0.9]
+        coeff_entries = {}
+
+        for idx, (label, default) in enumerate(zip(coeff_labels, coeff_defaults)):
+            row = idx // 2
+            col = (idx % 2) * 2
+            ttk.Label(coeff_frame, text=label + ":").grid(
+                row=row, column=col, sticky="w", padx=5, pady=2
+            )
+            entry = ttk.Entry(coeff_frame, width=10)
+            entry.grid(row=row, column=col + 1, padx=5, pady=2)
+            entry.insert(0, str(default))
+            coeff_entries[label] = entry
+
+        if type_id:
+            info = self.db.get_nozzle_type_info(type_id)
+            if info:
+                entry_name.insert(0, info["Название"])
+                combo_material.set(info["Материал"] or "Латунь")
+                entry_diameter.insert(0, f"{info['Диаметр (мм)']:.2f}")
+                entry_resource.insert(0, f"{info['Ресурс (г)']:.0f}")
+                for label in coeff_labels:
+                    key = f"Коэф. износа {label}"
+                    coeff_entries[label].delete(0, tk.END)
+                    coeff_entries[label].insert(0, f"{info[key]:.2f}")
+
+        def save():
+            try:
+                name = entry_name.get().strip()
+                material = combo_material.get().strip()
+                diameter = float(entry_diameter.get().replace(",", ".") or 0.4)
+                resource = float(entry_resource.get().replace(",", "."))
+                if not name:
+                    messagebox.showerror("Ошибка", "Название обязательно.")
+                    return
+                if resource <= 0:
+                    messagebox.showerror("Ошибка", "Ресурс должен быть > 0.")
+                    return
+
+                coeffs = []
+                for label in coeff_labels:
+                    val = float(coeff_entries[label].get().replace(",", "."))
+                    coeffs.append(val)
+
+                if type_id:
+                    ok = self.db.update_nozzle_type(
+                        type_id, name, material, diameter, resource, *coeffs
+                    )
+                else:
+                    ok = self.db.add_nozzle_type(
+                        name, material, diameter, resource, *coeffs
+                    )
+
+                if ok:
+                    dialog.destroy()
+                    self.refresh_all()
+                else:
+                    messagebox.showerror("Ошибка", "Не удалось сохранить (возможно, дубликат названия).")
+            except ValueError:
+                messagebox.showerror("Ошибка", "Проверь числа.")
+
+        ttk.Button(dialog, text="💾 Сохранить", command=save).pack(pady=15)
+
+    def delete_selected_nozzle_type(self):
+        sel = self.tree_nozzle_types.selection()
+        if not sel:
+            return
+        type_id = int(sel[0])
+        if not messagebox.askyesno("Удалить?",
+                "Удалить тип сопла?\nЕсли есть сопла этого типа — удаление не сработает."):
+            return
+        if self.db.delete_nozzle_type(type_id):
+            self.refresh_all()
+        else:
+            messagebox.showerror("Ошибка", "Тип используется в таблице Сопла.")
 
 
 if __name__ == "__main__":
