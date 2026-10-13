@@ -30,3 +30,5 @@ desktop.ini
 # Логи и временные файлы
 *.log
 *.tmp
+
+_test_db.py
