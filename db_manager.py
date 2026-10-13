@@ -205,3 +205,240 @@ class DatabaseManager:
             ORDER BY r."Дата события" DESC
         '''
         return self.execute_query(query, (project_id,))
+    
+        # ==================== Типы сопел ====================
+    def get_all_nozzle_types(self):
+        return self.execute_query(
+            'SELECT * FROM "Типы сопел" ORDER BY "Название"'
+        )
+
+    def get_nozzle_type_info(self, type_id):
+        rows = self.execute_query(
+            'SELECT * FROM "Типы сопел" WHERE "id" = ?', (type_id,)
+        )
+        return rows[0] if rows else None
+
+    def add_nozzle_type(self, name, material, diameter, resource,
+                        coeff_pla=1.0, coeff_pla_plus=1.0,
+                        coeff_pla_cf=5.0, coeff_pla_gf=5.0,
+                        coeff_petg=1.0, coeff_petg_plus=1.0,
+                        coeff_petg_cf=5.0, coeff_petg_gf=5.0,
+                        coeff_abs=1.2, coeff_abs_cf=6.0, coeff_abs_gf=6.0,
+                        coeff_asa=1.3, coeff_asa_cf=6.0,
+                        coeff_tpu_95a=0.8, coeff_tpu_98a=0.8,
+                        coeff_tpu_85a=0.7, coeff_tpu_75d=0.9,
+                        notes=""):
+        return self.execute_commit(
+            '''INSERT INTO "Типы сопел"
+               ("Название", "Материал", "Диаметр (мм)", "Ресурс (г)",
+                "Коэф. износа PLA", "Коэф. износа PLA+",
+                "Коэф. износа PLA-CF", "Коэф. износа PLA-GF",
+                "Коэф. износа PETG", "Коэф. износа PETG+",
+                "Коэф. износа PETG-CF", "Коэф. износа PETG-GF",
+                "Коэф. износа ABS", "Коэф. износа ABS-CF", "Коэф. износа ABS-GF",
+                "Коэф. износа ASA", "Коэф. износа ASA-CF",
+                "Коэф. износа TPU 95A", "Коэф. износа TPU 98A",
+                "Коэф. износа TPU 85A", "Коэф. износа TPU 75D",
+                "Заметки")
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                       ?, ?, ?, ?, ?)''',
+            (name, material, diameter, resource,
+             coeff_pla, coeff_pla_plus, coeff_pla_cf, coeff_pla_gf,
+             coeff_petg, coeff_petg_plus, coeff_petg_cf, coeff_petg_gf,
+             coeff_abs, coeff_abs_cf, coeff_abs_gf,
+             coeff_asa, coeff_asa_cf,
+             coeff_tpu_95a, coeff_tpu_98a, coeff_tpu_85a, coeff_tpu_75d,
+             notes)
+        )
+
+    def update_nozzle_type(self, type_id, name, material, diameter, resource,
+                           coeff_pla, coeff_pla_plus, coeff_pla_cf, coeff_pla_gf,
+                           coeff_petg, coeff_petg_plus, coeff_petg_cf, coeff_petg_gf,
+                           coeff_abs, coeff_abs_cf, coeff_abs_gf,
+                           coeff_asa, coeff_asa_cf,
+                           coeff_tpu_95a, coeff_tpu_98a, coeff_tpu_85a, coeff_tpu_75d,
+                           notes=""):
+        return self.execute_commit(
+            '''UPDATE "Типы сопел" SET
+               "Название" = ?, "Материал" = ?, "Диаметр (мм)" = ?, "Ресурс (г)" = ?,
+               "Коэф. износа PLA" = ?, "Коэф. износа PLA+" = ?,
+               "Коэф. износа PLA-CF" = ?, "Коэф. износа PLA-GF" = ?,
+               "Коэф. износа PETG" = ?, "Коэф. износа PETG+" = ?,
+               "Коэф. износа PETG-CF" = ?, "Коэф. износа PETG-GF" = ?,
+               "Коэф. износа ABS" = ?, "Коэф. износа ABS-CF" = ?,
+               "Коэф. износа ABS-GF" = ?,
+               "Коэф. износа ASA" = ?, "Коэф. износа ASA-CF" = ?,
+               "Коэф. износа TPU 95A" = ?, "Коэф. износа TPU 98A" = ?,
+               "Коэф. износа TPU 85A" = ?, "Коэф. износа TPU 75D" = ?,
+               "Заметки" = ?
+               WHERE "id" = ?''',
+            (name, material, diameter, resource,
+             coeff_pla, coeff_pla_plus, coeff_pla_cf, coeff_pla_gf,
+             coeff_petg, coeff_petg_plus, coeff_petg_cf, coeff_petg_gf,
+             coeff_abs, coeff_abs_cf, coeff_abs_gf,
+             coeff_asa, coeff_asa_cf,
+             coeff_tpu_95a, coeff_tpu_98a, coeff_tpu_85a, coeff_tpu_75d,
+             notes, type_id)
+        )
+
+    def delete_nozzle_type(self, type_id):
+        return self.execute_commit(
+            'DELETE FROM "Типы сопел" WHERE "id" = ?', (type_id,)
+        )
+
+    def get_wear_coefficient(self, nozzle_type_id, plastic_type_id):
+        """Возвращает коэффициент износа для пары (тип сопла, вид пластика).
+        Если для данного вида пластика нет колонки — возвращает 1.0."""
+        nozzle_type = self.get_nozzle_type_info(nozzle_type_id)
+        plastic = self.get_plastic_type_info(plastic_type_id)
+        if not nozzle_type or not plastic:
+            return 1.0
+
+        plastic_name = plastic["Название"]
+        # Ищем колонку "Коэф. износа <Название пластика>"
+        col_name = f"Коэф. износа {plastic_name}"
+
+        # Проверяем, есть ли такая колонка в схеме
+        cols = self.execute_query('PRAGMA table_info("Типы сопел")')
+        col_names = [c["name"] for c in cols]
+        if col_name not in col_names:
+            return 1.0
+        return float(nozzle_type[col_name] or 1.0)
+
+    # ==================== Сопла ====================
+    def get_all_nozzles(self):
+        """Возвращает все сопла с расшифровкой типа, ресурса и остатка."""
+        query = '''
+            SELECT n.*,
+                   t."Название" AS "Тип",
+                   t."Материал" AS "Материал",
+                   t."Диаметр (мм)" AS "Диаметр",
+                   t."Ресурс (г)" AS "Ресурс",
+                   (t."Ресурс (г)" - n."Наработка (г)") AS "Остаток"
+            FROM "Сопла" n
+            JOIN "Типы сопел" t ON n."Тип сопла id" = t."id"
+            ORDER BY "Остаток" ASC
+        '''
+        return self.execute_query(query)
+
+    def get_nozzle_info(self, nozzle_id):
+        query = '''
+            SELECT n.*,
+                   t."Название" AS "Тип",
+                   t."Материал" AS "Материал",
+                   t."Диаметр (мм)" AS "Диаметр",
+                   t."Ресурс (г)" AS "Ресурс",
+                   (t."Ресурс (г)" - n."Наработка (г)") AS "Остаток"
+            FROM "Сопла" n
+            JOIN "Типы сопел" t ON n."Тип сопла id" = t."id"
+            WHERE n."id" = ?
+        '''
+        rows = self.execute_query(query, (nozzle_id,))
+        return rows[0] if rows else None
+
+    def add_nozzle(self, type_id, serial, cost, purchase_date=None, notes=""):
+        return self.execute_commit(
+            '''INSERT INTO "Сопла"
+               ("Тип сопла id", "Серийный номер", "Стоимость (руб)",
+                "Дата покупки", "Заметки")
+               VALUES (?, ?, ?, ?, ?)''',
+            (type_id, serial, cost, purchase_date, notes)
+        )
+
+    def update_nozzle(self, nozzle_id, type_id, serial, cost,
+                      status, notes=""):
+        return self.execute_commit(
+            '''UPDATE "Сопла" SET
+               "Тип сопла id" = ?, "Серийный номер" = ?,
+               "Стоимость (руб)" = ?, "Статус" = ?, "Заметки" = ?
+               WHERE "id" = ?''',
+            (type_id, serial, cost, status, notes, nozzle_id)
+        )
+
+    def delete_nozzle(self, nozzle_id):
+        return self.execute_commit(
+            'DELETE FROM "Сопла" WHERE "id" = ?', (nozzle_id,)
+        )
+
+    def add_nozzle_wear(self, nozzle_id, plastic_type_id, grams):
+        """Увеличивает наработку сопла на эффективную нагрузку (г × коэф.)."""
+        nozzle = self.get_nozzle_info(nozzle_id)
+        if not nozzle:
+            return False
+        coeff = self.get_wear_coefficient(nozzle["Тип сопла id"], plastic_type_id)
+        effective = grams * coeff
+        new_wear = (nozzle["Наработка (г)"] or 0) + effective
+        return self.execute_commit(
+            'UPDATE "Сопла" SET "Наработка (г)" = ? WHERE "id" = ?',
+            (new_wear, nozzle_id)
+        )
+
+    def find_nozzle_for_print(self, plastic_type_id, grams_required):
+        """Ищет сопло с минимальным остатком ресурса, которого хватит на печать.
+        Возвращает (nozzle_row, effective_load) или (None, effective_load)."""
+        coeff = self.get_wear_coefficient_from_plastic(plastic_type_id)
+        effective_load = grams_required * coeff
+
+        # Все сопла в статусе "В работе", отсортированы по остатку возрастанию
+        query = '''
+            SELECT n.*,
+                   t."Ресурс (г)" - n."Наработка (г)" AS "Остаток",
+                   t."Название" AS "Тип",
+                   t."Ресурс (г)" AS "Ресурс"
+            FROM "Сопла" n
+            JOIN "Типы сопел" t ON n."Тип сопла id" = t."id"
+            WHERE n."Статус" = 'В работе'
+            ORDER BY "Остаток" ASC
+        '''
+        nozzles = self.execute_query(query)
+        for n in nozzles:
+            if n["Остаток"] >= effective_load:
+                return n, effective_load
+        return None, effective_load
+
+    def get_wear_coefficient_from_plastic(self, plastic_type_id):
+        """Возвращает коэффициент износа, используя первое сопло 'В работе'.
+        Используется для предварительной оценки нагрузки."""
+        nozzles = self.execute_query(
+            '''SELECT "Тип сопла id" FROM "Сопла"
+               WHERE "Статус" = 'В работе' LIMIT 1'''
+        )
+        if not nozzles:
+            return 1.0
+        return self.get_wear_coefficient(nozzles[0]["Тип сопла id"], plastic_type_id)
+
+    def calculate_nozzle_cost(self, nozzle_id, plastic_type_id, grams):
+        """Амортизация сопла на конкретную печать."""
+        nozzle = self.get_nozzle_info(nozzle_id)
+        if not nozzle:
+            return 0.0
+        resource = nozzle["Ресурс"] or 0
+        if resource <= 0:
+            return 0.0
+        coeff = self.get_wear_coefficient(nozzle["Тип сопла id"], plastic_type_id)
+        cost = float(nozzle["Стоимость (руб)"] or 0)
+        return (grams * coeff / resource) * cost
+
+    # ==================== Параметры принтера ====================
+    def get_printer_cost(self):
+        rows = self.execute_query(
+            'SELECT "Стоимость принтера (руб)" FROM "Тарифы" LIMIT 1'
+        )
+        if rows and rows[0][0] is not None:
+            return float(rows[0][0])
+        return 0.0
+
+    def get_printer_hours_to_overhaul(self):
+        rows = self.execute_query(
+            'SELECT "Часы до кап. ремонта" FROM "Тарифы" LIMIT 1'
+        )
+        if rows and rows[0][0] is not None:
+            return float(rows[0][0])
+        return 5000.0
+
+    def update_printer_params(self, cost, hours):
+        return self.execute_commit(
+            'UPDATE "Тарифы" SET "Стоимость принтера (руб)" = ?, '
+            '"Часы до кап. ремонта" = ?',
+            (cost, hours)
+        )
