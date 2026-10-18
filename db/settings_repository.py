@@ -46,7 +46,6 @@ class SettingsRepository:
 
     # ==================== ТАРИФЫ И НАЛОГИ ====================
     def get_tariffs(self):
-        # Читаем тарифы вместе с названием налогового режима
         return self.db.fetch_one('''
             SELECT t.*, n."Название" AS "tax_name" 
             FROM "sys_Тарифы" t
@@ -86,3 +85,25 @@ class SettingsRepository:
             VALUES (?, ?, ?)
             ON CONFLICT("id Пластика", "id Сопла") DO UPDATE SET "Коэффициент"=excluded."Коэффициент"
         ''', (p_id, n_id, coeff))
+
+    # ==================== ЦВЕТА ====================
+    def get_all_colors(self):
+        return self.db.fetch_all('''
+            SELECT * FROM "sys_Цвета" 
+            ORDER BY "Группа", "Порядок", "Название"
+        ''')
+
+    def add_color(self, name: str, group: str, order: int, hex_code: str, notes: str) -> bool:
+        return self.db.execute(
+            'INSERT INTO "sys_Цвета" ("Название", "Группа", "Порядок", "HEX", "Примечание") VALUES (?, ?, ?, ?, ?)',
+            (name.strip(), group, order, hex_code.strip(), notes)
+        )
+
+    def update_color(self, c_id: int, name: str, group: str, order: int, hex_code: str, notes: str) -> bool:
+        return self.db.execute(
+            'UPDATE "sys_Цвета" SET "Название"=?, "Группа"=?, "Порядок"=?, "HEX"=?, "Примечание"=? WHERE "id"=?',
+            (name.strip(), group, order, hex_code.strip(), notes, c_id)
+        )
+
+    def delete_color(self, c_id: int) -> bool:
+        return self.db.execute('DELETE FROM "sys_Цвета" WHERE "id"=?', (c_id,))

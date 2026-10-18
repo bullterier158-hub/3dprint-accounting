@@ -16,16 +16,19 @@ class SettingsTab(BaseTab):
         self.tab_plastics = ttk.Frame(self.sub_notebook)
         self.tab_nozzles = ttk.Frame(self.sub_notebook)
         self.tab_matrix = ttk.Frame(self.sub_notebook)
+        self.tab_colors = ttk.Frame(self.sub_notebook)
 
         self.sub_notebook.add(self.tab_tariffs, text="Тарифы")
         self.sub_notebook.add(self.tab_plastics, text="Виды пластика")
         self.sub_notebook.add(self.tab_nozzles, text="Типы сопел")
         self.sub_notebook.add(self.tab_matrix, text="Коэффициенты износа")
+        self.sub_notebook.add(self.tab_colors, text="Цвета")
 
         self._build_tariffs_ui()
         self._build_plastics_ui()
         self._build_nozzles_ui()
         self._build_matrix_ui()
+        self._build_colors_ui()
 
     # =================================================================
     # ПОД-ВКЛАДКА 1: ТАРИФЫ
@@ -123,7 +126,6 @@ class SettingsTab(BaseTab):
         self.tree_plastics.pack(side="left", fill="both", expand=True)
         scroll.pack(side="right", fill="y")
 
-        # Контекстное меню
         self.ctx_menu_plastics = tk.Menu(self, tearoff=0)
         self.ctx_menu_plastics.add_command(label="✏ Изменить", command=self._edit_plastic)
         self.ctx_menu_plastics.add_command(label="🗑 Удалить", command=self._delete_plastic)
@@ -143,10 +145,8 @@ class SettingsTab(BaseTab):
         for i in self.tree_plastics.get_children(): self.tree_plastics.delete(i)
         for p in self.db.settings.get_all_plastics():
             self.tree_plastics.insert("", "end", iid=str(p["id"]), values=(
-                p["Основа"],
-                p["Модификатор"], 
-                fmt_float(p["Коэф. трудности"]), 
-                p["Примечание"] or ""
+                p["Основа"], p["Модификатор"], 
+                fmt_float(p["Коэф. трудности"]), p["Примечание"] or ""
             ))
 
     def _plastic_form(self, p_id=None):
@@ -157,14 +157,10 @@ class SettingsTab(BaseTab):
 
         ttk.Label(dialog, text="Основа (напр. PLA):").pack(pady=(10,2))
         e_base = ttk.Entry(dialog); e_base.pack(fill="x", padx=20)
-        
         ttk.Label(dialog, text="Модификатор (напр. +, CF, пусто):").pack(pady=(5,2))
         e_mod = ttk.Entry(dialog); e_mod.pack(fill="x", padx=20)
-
         ttk.Label(dialog, text="Коэф. трудности:").pack(pady=(5,2))
-        e_coeff = ttk.Entry(dialog); e_coeff.pack(fill="x", padx=20)
-        e_coeff.insert(0, "1.0")
-
+        e_coeff = ttk.Entry(dialog); e_coeff.pack(fill="x", padx=20); e_coeff.insert(0, "1.0")
         ttk.Label(dialog, text="Примечание:").pack(pady=(5,2))
         e_note = ttk.Entry(dialog); e_note.pack(fill="x", padx=20)
 
@@ -181,8 +177,7 @@ class SettingsTab(BaseTab):
                 ok = self.db.settings.update_plastic(p_id, e_base.get(), e_mod.get(), parse_float(e_coeff.get()), e_note.get()) if p_id else \
                      self.db.settings.add_plastic(e_base.get(), e_mod.get(), parse_float(e_coeff.get()), e_note.get())
                 if ok:
-                    dialog.destroy()
-                    self.refresh()
+                    dialog.destroy(); self.refresh()
                 else:
                     messagebox.showerror("Ошибка", "Не удалось сохранить (возможно дубликат).")
             except ValueError:
@@ -196,8 +191,7 @@ class SettingsTab(BaseTab):
     def _delete_plastic(self):
         sel = self.tree_plastics.selection()
         if sel and messagebox.askyesno("Удалить?", "Точно?"):
-            self.db.settings.delete_plastic(int(sel[0]))
-            self.refresh()
+            self.db.settings.delete_plastic(int(sel[0])); self.refresh()
 
     # =================================================================
     # ПОД-ВКЛАДКА 3: ТИПЫ СОПЕЛ
@@ -211,16 +205,13 @@ class SettingsTab(BaseTab):
         
         self.tree_nozzles.heading("Название", text="Название")
         self.tree_nozzles.column("Название", width=180, anchor="center")
-        
         self.tree_nozzles.heading("Ресурс (г)", text="Ожидаемый ресурс (г)")
         self.tree_nozzles.column("Ресурс (г)", width=150, anchor="center")
-        
         self.tree_nozzles.heading("Примечание", text="Примечание")
         self.tree_nozzles.column("Примечание", width=350, anchor="center")
         
         scroll = ttk.Scrollbar(tree_frm, orient="vertical", command=self.tree_nozzles.yview)
         self.tree_nozzles.configure(yscrollcommand=scroll.set)
-        
         self.tree_nozzles.pack(side="left", fill="both", expand=True)
         scroll.pack(side="right", fill="y")
 
@@ -243,9 +234,7 @@ class SettingsTab(BaseTab):
         for i in self.tree_nozzles.get_children(): self.tree_nozzles.delete(i)
         for n in self.db.settings.get_all_nozzle_types():
             self.tree_nozzles.insert("", "end", iid=str(n["id"]), values=(
-                n["Название"],
-                fmt_float(n["Ожидаемый ресурс (г)"]), 
-                n["Примечание"] or ""
+                n["Название"], fmt_float(n["Ожидаемый ресурс (г)"]), n["Примечание"] or ""
             ))
 
     def _nozzle_form(self, n_id=None):
@@ -256,10 +245,8 @@ class SettingsTab(BaseTab):
 
         ttk.Label(dialog, text="Название:").pack(pady=(10,2))
         e_name = ttk.Entry(dialog); e_name.pack(fill="x", padx=20)
-
         ttk.Label(dialog, text="Ожидаемый ресурс (г):").pack(pady=(5,2))
         e_res = ttk.Entry(dialog); e_res.pack(fill="x", padx=20)
-
         ttk.Label(dialog, text="Примечание:").pack(pady=(5,2))
         e_note = ttk.Entry(dialog); e_note.pack(fill="x", padx=20)
 
@@ -275,8 +262,7 @@ class SettingsTab(BaseTab):
                 ok = self.db.settings.update_nozzle_type(n_id, e_name.get(), parse_float(e_res.get()), e_note.get()) if n_id else \
                      self.db.settings.add_nozzle_type(e_name.get(), parse_float(e_res.get()), e_note.get())
                 if ok:
-                    dialog.destroy()
-                    self.refresh()
+                    dialog.destroy(); self.refresh()
                 else:
                     messagebox.showerror("Ошибка", "Не удалось (возможно дубликат).")
             except ValueError:
@@ -290,69 +276,51 @@ class SettingsTab(BaseTab):
     def _delete_nozzle(self):
         sel = self.tree_nozzles.selection()
         if sel and messagebox.askyesno("Удалить?", "Точно?"):
-            self.db.settings.delete_nozzle_type(int(sel[0]))
-            self.refresh()
+            self.db.settings.delete_nozzle_type(int(sel[0])); self.refresh()
 
     # =================================================================
     # ПОД-ВКЛАДКА 4: МАТРИЦА КОЭФФИЦИЕНТОВ
     # =================================================================
     def _build_matrix_ui(self):
-        # Главный контейнер, который будет содержать Canvas и скроллбары
         self.matrix_container = ttk.Frame(self.tab_matrix)
         self.matrix_container.pack(fill="both", expand=True)
-
         self.canvas = tk.Canvas(self.matrix_container, highlightthickness=0)
         self.scroll_y = ttk.Scrollbar(self.matrix_container, orient="vertical", command=self.canvas.yview)
         self.scroll_x = ttk.Scrollbar(self.matrix_container, orient="horizontal", command=self.canvas.xview)
-        
         self.matrix_frame = ttk.Frame(self.canvas)
-        
         self.canvas_window = self.canvas.create_window((0, 0), window=self.matrix_frame, anchor="nw")
         self.canvas.configure(yscrollcommand=self.scroll_y.set, xscrollcommand=self.scroll_x.set)
-
-        # Упаковываем Canvas (скроллбары пока не пакуем)
         self.canvas.pack(side="left", fill="both", expand=True)
-
-        # Привязки для динамического появления скроллбаров
         self.matrix_frame.bind("<Configure>", self._on_frame_configure)
         self.canvas.bind("<Configure>", self._on_canvas_configure)
 
-        # Контекстное меню для ячеек
         self.ctx_menu_cell = tk.Menu(self, tearoff=0)
         self.ctx_menu_cell.add_command(label="✏ Редактировать", command=self._edit_matrix_cell)
         self.ctx_menu_cell.add_command(label="📋 Копировать", command=self._copy_matrix_cell)
-        self.active_cell_data = None # Сюда сохраняем (p_id, n_id, value, widget)
+        self.active_cell_data = None
 
     def _on_frame_configure(self, event=None):
-        # Обновляем область прокрутки
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
         self._toggle_scrollbars()
 
     def _on_canvas_configure(self, event):
-        # Растягиваем внутренний фрейм по ширине Canvas
         self.canvas.itemconfig(self.canvas_window, width=event.width)
         self._toggle_scrollbars()
 
     def _toggle_scrollbars(self):
-        # 1. Проверка для горизонтального скроллбара
         frame_width = self.matrix_frame.winfo_reqwidth()
         canvas_width = self.canvas.winfo_width()
         if frame_width > canvas_width:
-            if not self.scroll_x.winfo_ismapped():
-                self.scroll_x.pack(side="bottom", fill="x")
+            if not self.scroll_x.winfo_ismapped(): self.scroll_x.pack(side="bottom", fill="x")
         else:
-            if self.scroll_x.winfo_ismapped():
-                self.scroll_x.pack_forget()
+            if self.scroll_x.winfo_ismapped(): self.scroll_x.pack_forget()
 
-        # 2. Проверка для вертикального скроллбара
         frame_height = self.matrix_frame.winfo_reqheight()
         canvas_height = self.canvas.winfo_height()
         if frame_height > canvas_height:
-            if not self.scroll_y.winfo_ismapped():
-                self.scroll_y.pack(side="right", fill="y")
+            if not self.scroll_y.winfo_ismapped(): self.scroll_y.pack(side="right", fill="y")
         else:
-            if self.scroll_y.winfo_ismapped():
-                self.scroll_y.pack_forget()
+            if self.scroll_y.winfo_ismapped(): self.scroll_y.pack_forget()
 
     def _redraw_matrix(self):
         for widget in self.matrix_frame.winfo_children(): widget.destroy()
@@ -373,34 +341,23 @@ class SettingsTab(BaseTab):
             ttk.Label(self.matrix_frame, text=pname).grid(row=row, column=0, sticky="w", padx=10, pady=2)
             for col, nid in enumerate(nozzles.keys(), start=1):
                 val = next((x["coeff"] for x in data if x["p_id"] == pid and x["n_id"] == nid), 1.0)
-                
-                # Используем Label вместо Entry
                 lbl = ttk.Label(self.matrix_frame, text=fmt_float(val, 2), relief="flat", padding=4, anchor="center", width=8)
                 lbl.grid(row=row, column=col, padx=2, pady=2)
-                
-                # Биндим ПКМ на Label
                 lbl.bind("<Button-3>", lambda e, p=pid, n=nid, v=val, w=lbl: self._show_cell_context_menu(e, p, n, v, w))
         
-        # После отрисовки обновляем скроллбары
-        self.canvas.update_idletasks() # Заставляем Tkinter пересчитать размеры
+        self.canvas.update_idletasks()
         self._on_frame_configure()
 
     def _show_cell_context_menu(self, event, p_id, n_id, current_val, widget):
-        # Сохраняем контекст для команд
         self.active_cell_data = (p_id, n_id, current_val, widget)
-        
-        # Меняем цвет, чтобы показать, какая ячейка выделена
         widget.configure(background="#e0e0e0")
         self.ctx_menu_cell.post(event.x_root, event.y_root)
 
     def _edit_matrix_cell(self):
         if not self.active_cell_data: return
         p_id, n_id, old_val, widget = self.active_cell_data
-        
-        # Возвращаем фон
         widget.configure(background="")
         
-        # Простое окно ввода
         dialog = tk.Toplevel(self)
         dialog.title("Изменить коэффициент")
         dialog.geometry("250x120")
@@ -416,8 +373,7 @@ class SettingsTab(BaseTab):
             try:
                 new_val = parse_float(entry.get())
                 if self.db.settings.set_wear_coefficient(p_id, n_id, new_val):
-                    dialog.destroy()
-                    self._redraw_matrix() # Перерисовываем всю матрицу
+                    dialog.destroy(); self._redraw_matrix()
                 else:
                     messagebox.showerror("Ошибка", "Не удалось сохранить.")
             except ValueError:
@@ -428,14 +384,143 @@ class SettingsTab(BaseTab):
     def _copy_matrix_cell(self):
         if not self.active_cell_data: return
         p_id, n_id, old_val, widget = self.active_cell_data
-        
-        # Возвращаем фон
         widget.configure(background="")
-        
-        # Копируем в буфер обмена
         self.clipboard_clear()
         self.clipboard_append(str(old_val))
         messagebox.showinfo("Скопировано", f"Значение '{old_val}' скопировано в буфер обмена.")
+
+    # =================================================================
+    # ПОД-ВКЛАДКА 5: ЦВЕТА
+    # =================================================================
+    def _build_colors_ui(self):
+        tree_frm = ttk.Frame(self.tab_colors)
+        tree_frm.pack(fill="both", expand=True, padx=10, pady=(10, 5))
+
+        # Первая колонка (#0) - это колонка дерева, мы спрячем её заголовок, но картинка ляжет именно туда
+        cols = ("Название", "Группа", "Порядок", "HEX", "Примечание")
+        self.tree_colors = ttk.Treeview(tree_frm, columns=cols) # убрали show="headings"
+        
+        # Настраиваем первую (скрытую) колонку
+        self.tree_colors.heading("#0", text="Превью")
+        self.tree_colors.column("#0", width=50, anchor="center", stretch=False)
+        
+        self.tree_colors.heading("Название", text="Название")
+        self.tree_colors.column("Название", width=150, anchor="center")
+        
+        self.tree_colors.heading("Группа", text="Группа")
+        self.tree_colors.column("Группа", width=120, anchor="center")
+        
+        self.tree_colors.heading("Порядок", text="Порядок")
+        self.tree_colors.column("Порядок", width=80, anchor="center")
+        
+        self.tree_colors.heading("HEX", text="HEX (цвет)")
+        self.tree_colors.column("HEX", width=100, anchor="center")
+        
+        self.tree_colors.heading("Примечание", text="Примечание")
+        self.tree_colors.column("Примечание", width=250, anchor="center")
+        
+        scroll = ttk.Scrollbar(tree_frm, orient="vertical", command=self.tree_colors.yview)
+        self.tree_colors.configure(yscrollcommand=scroll.set)
+        
+        self.tree_colors.pack(side="left", fill="both", expand=True)
+        scroll.pack(side="right", fill="y")
+
+        self.ctx_menu_colors = tk.Menu(self, tearoff=0)
+        self.ctx_menu_colors.add_command(label="✏ Изменить", command=self._edit_color)
+        self.ctx_menu_colors.add_command(label="🗑 Удалить", command=self._delete_color)
+        self.tree_colors.bind("<Button-3>", self._show_color_context_menu)
+
+        frm_btns = ttk.Frame(self.tab_colors)
+        frm_btns.pack(fill="x", padx=10, pady=5)
+        ttk.Button(frm_btns, text="➕ Добавить", command=self._add_color).pack(side="right")
+
+        self.color_icons = {}
+
+    def _show_color_context_menu(self, event):
+        item = self.tree_colors.identify_row(event.y)
+        if item:
+            self.tree_colors.selection_set(item)
+            self.ctx_menu_colors.post(event.x_root, event.y_root)
+
+    def _refresh_colors(self):
+        for i in self.tree_colors.get_children(): 
+            self.tree_colors.delete(i)
+        self.color_icons.clear()
+
+        for c in self.db.settings.get_all_colors():
+            img = ""
+            if c["HEX"] and c["HEX"].startswith("#") and len(c["HEX"]) == 7:
+                try:
+                    icon = tk.PhotoImage(width=16, height=16)
+                    icon.put(c["HEX"], to=(0, 0, 16, 16))
+                    self.color_icons[c["id"]] = icon
+                    img = icon
+                except tk.TclError:
+                    img = ""
+
+            # Важно: image=img передаётся отдельным аргументом, а не внутри values!
+            self.tree_colors.insert("", "end", iid=str(c["id"]), image=img, values=(
+                c["Название"], c["Группа"], c["Порядок"], c["HEX"] or "", c["Примечание"] or ""
+            ))
+
+    def _color_form(self, c_id=None):
+        dialog = tk.Toplevel(self)
+        dialog.title("Цвет")
+        dialog.geometry("350x300")
+        dialog.grab_set()
+
+        ttk.Label(dialog, text="Название:").pack(pady=(10,2))
+        e_name = ttk.Entry(dialog); e_name.pack(fill="x", padx=20)
+
+        ttk.Label(dialog, text="Группа:").pack(pady=(5,2))
+        combo_group = ttk.Combobox(dialog, values=["Ахроматические", "Тёплые", "Холодные", "Прозрачные", "Особые", "Прочее"], state="readonly")
+        combo_group.pack(fill="x", padx=20)
+        combo_group.current(5)
+
+        ttk.Label(dialog, text="Порядок (цифра для сортировки):").pack(pady=(5,2))
+        e_order = ttk.Entry(dialog); e_order.pack(fill="x", padx=20)
+        e_order.insert(0, "100")
+
+        ttk.Label(dialog, text="HEX (например, #FF0000):").pack(pady=(5,2))
+        e_hex = ttk.Entry(dialog); e_hex.pack(fill="x", padx=20)
+
+        ttk.Label(dialog, text="Примечание:").pack(pady=(5,2))
+        e_note = ttk.Entry(dialog); e_note.pack(fill="x", padx=20)
+
+        if c_id:
+            row = next((x for x in self.db.settings.get_all_colors() if x["id"] == c_id), None)
+            if row:
+                e_name.insert(0, row["Название"])
+                combo_group.set(row["Группа"])
+                e_order.delete(0, tk.END); e_order.insert(0, str(row["Порядок"]))
+                e_hex.insert(0, row["HEX"] or "")
+                e_note.insert(0, row["Примечание"] or "")
+
+        def save():
+            try:
+                order = int(e_order.get())
+                hex_val = e_hex.get().strip()
+                if hex_val and (not hex_val.startswith("#") or len(hex_val) != 7):
+                    messagebox.showerror("Ошибка", "HEX должен быть в формате #RRGGBB (например, #FF0000)")
+                    return
+                ok = self.db.settings.update_color(c_id, e_name.get(), combo_group.get(), order, hex_val, e_note.get()) if c_id else \
+                     self.db.settings.add_color(e_name.get(), combo_group.get(), order, hex_val, e_note.get())
+                if ok:
+                    dialog.destroy(); self.refresh()
+                else:
+                    messagebox.showerror("Ошибка", "Не удалось сохранить (возможно дубликат).")
+            except ValueError:
+                messagebox.showerror("Ошибка", "Порядок должен быть целым числом.")
+        ttk.Button(dialog, text="Сохранить", command=save).pack(pady=15)
+
+    def _add_color(self): self._color_form()
+    def _edit_color(self):
+        sel = self.tree_colors.selection()
+        if sel: self._color_form(int(sel[0]))
+    def _delete_color(self):
+        sel = self.tree_colors.selection()
+        if sel and messagebox.askyesno("Удалить?", "Точно?"):
+            self.db.settings.delete_color(int(sel[0])); self.refresh()
 
     # =================================================================
     # ОБНОВЛЕНИЕ
@@ -464,3 +549,4 @@ class SettingsTab(BaseTab):
         self._refresh_plastics()
         self._refresh_nozzles()
         self._redraw_matrix()
+        self._refresh_colors()
