@@ -52,7 +52,6 @@ CREATE TABLE IF NOT EXISTS "sys_Тарифы" (
 	CHECK(("Тип тарифа на электричество" = 'фикс' AND "Цена 1кВт ночь (руб)" IS NULL) OR ("Тип тарифа на электричество" = 'день/ночь' AND "Цена 1кВт ночь (руб)" IS NOT NULL))
 );
 
--- НОВАЯ ТАБЛИЦА: Цвета
 CREATE TABLE IF NOT EXISTS "sys_Цвета" (
 	"id"	INTEGER,
 	"Название"	TEXT NOT NULL UNIQUE,
@@ -70,9 +69,9 @@ CREATE TABLE IF NOT EXISTS "sys_Цвета" (
 CREATE TABLE IF NOT EXISTS "inv_Принтеры" (
 	"id"	INTEGER,
 	"Название"	TEXT NOT NULL,
-	"Группа по соплу"	INTEGER DEFAULT 1, -- Число для группировки совместимости
+	"Группа по соплу"	INTEGER DEFAULT 1,
 	"Стоимость (руб)"	REAL NOT NULL DEFAULT 0.0 CHECK("Стоимость (руб)" >= 0),
-	"Ресурс (г)"	REAL NOT NULL DEFAULT 0.0 CHECK("Ресурс (г)" >= 0), -- Заявленный ресурс
+	"Ресурс (ч)"	REAL NOT NULL DEFAULT 0.0 CHECK("Ресурс (ч)" >= 0), -- ИЗМЕНЕНО: теперь в часах
 	"Примечание"	TEXT,
 	PRIMARY KEY("id" AUTOINCREMENT)
 );
@@ -93,10 +92,26 @@ CREATE TABLE IF NOT EXISTS "inv_Катушки пластика" (
 	"id Цвета"	INTEGER NOT NULL,
 	"Стоимость покупки (руб)"	REAL NOT NULL DEFAULT 0.0 CHECK("Стоимость покупки (руб)" >= 0),
 	"Вес Нетто (г)"	REAL NOT NULL CHECK("Вес Нетто (г)" > 0),
+	"Статус"	TEXT NOT NULL DEFAULT 'Активна' CHECK("Статус" IN ('Активна', 'Закончилась', 'Выброшена', 'Приварена')),
 	"Примечание"	TEXT,
 	PRIMARY KEY("id" AUTOINCREMENT),
 	FOREIGN KEY("id Материала") REFERENCES "sys_Виды пластика"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
 	FOREIGN KEY("id Цвета") REFERENCES "sys_Цвета"("id") ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+-- ==============================================================================
+-- БЛОК 3: ДЕЯТЕЛЬНОСТЬ (biz_)
+-- ==============================================================================
+
+CREATE TABLE IF NOT EXISTS "biz_Расход пластика" (
+	"id"	INTEGER,
+	"id Катушки"	INTEGER NOT NULL,
+	"Количество (г)"	REAL NOT NULL CHECK("Количество (г)" > 0),
+	"Тип действия"	TEXT NOT NULL DEFAULT 'Расход' CHECK("Тип действия" IN ('Расход', 'Сварка (списание)', 'Сварка (пополнение)')),
+	"Дата события"	TEXT DEFAULT (datetime('now', 'localtime')),
+	"Примечание"	TEXT,
+	PRIMARY KEY("id" AUTOINCREMENT),
+	FOREIGN KEY("id Катушки") REFERENCES "inv_Катушки пластика"("id") ON DELETE CASCADE
 );
 
 -- ==============================================================================
@@ -108,6 +123,8 @@ CREATE INDEX IF NOT EXISTS "idx_sys_plastic_base" ON "sys_Виды пласти�
 CREATE INDEX IF NOT EXISTS "idx_inv_printer_group" ON "inv_Принтеры" ("Группа по соплу");
 CREATE INDEX IF NOT EXISTS "idx_inv_nozzle_type" ON "inv_Сопла" ("id Типа сопла");
 CREATE INDEX IF NOT EXISTS "idx_inv_spool_material" ON "inv_Катушки пластика" ("id Материала");
+
+CREATE INDEX IF NOT EXISTS "idx_biz_consumption_spool" ON "biz_Расход пластика" ("id Катушки");
 
 -- ==============================================================================
 -- НАЧАЛЬНЫЕ ДАННЫЕ (SEED DATA)

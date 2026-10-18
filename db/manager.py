@@ -1,22 +1,34 @@
 # db/manager.py
+from pathlib import Path
 from db.connection import DatabaseConnection
 from db.settings_repository import SettingsRepository
-from config import SCHEMA_PATH
+from db.inventory_repository import InventoryRepository
+from config import SCHEMA_PATH, BASE_DIR # Добавили BASE_DIR
 
 class DatabaseManager(DatabaseConnection):
     def __init__(self, db_path: str):
         super().__init__(db_path)
         self._ensure_schema()
         
-        # Тот самый дочерний класс для редактирования
+        # Подключаем репозитории
         self.settings = SettingsRepository(self)
+        self.inventory = InventoryRepository(self)
 
-# db/manager.py (фрагмент)
     def _ensure_schema(self):
+        # 1. Применяем основную схему (справочники создаются всегда)
         if SCHEMA_PATH.exists():
             with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
-                sql = f.read()
-            self.executescript(sql)
-            
-        # Обеспечиваем наличие строки тарифов
+                self.executescript(f.read())
+        
         self.execute('INSERT OR IGNORE INTO "sys_Тарифы" ("id") VALUES (1)')
+
+        # 2. Проверяем, есть ли вообще принтеры в базе.
+        # Если таблица пуста, значит это первый запуск — заливаем тестовые данные.
+        has_printers = self.fetch_scalar('SELECT COUNT(*) FROM "inv_Принтеры"')
+        
+        if has_printers == 0:
+            seed_test_path = BASE_DIR / "db" / "seed_test.sql"
+            if seed_test_path.exists():
+                with open(seed_test_path, "r", encoding="utf-8") as f:
+                    self.executescript(f.read())
+                print("[DB] Загружены тестовые данные (seed_test.sql)")

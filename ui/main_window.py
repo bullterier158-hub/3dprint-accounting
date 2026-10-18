@@ -1,8 +1,10 @@
 # ui/main_window.py
 import tkinter as tk
 from tkinter import ttk
-from ui.tabs.settings_tab import SettingsTab
 from config import APP_TITLE, APP_GEOMETRY
+
+from ui.tabs.settings_tab import SettingsTab
+from ui.tabs.inventory_tab import InventoryTab  # <-- Импортируем новую вкладку
 
 class MainWindow:
     def __init__(self, root: tk.Tk, db):
@@ -21,9 +23,9 @@ class MainWindow:
 
     def _init_tabs(self):
         self.add_tab(SettingsTab)
+        self.add_tab(InventoryTab) # <-- Добавляем вкладку Склад
 
     def add_tab(self, tab_cls):
-        """Утилита для добавления вкладки в Notebook."""
         tab = tab_cls(self.notebook, self.db, self)
         text = f"{tab.icon} {tab.title}".strip()
         self.notebook.add(tab, text=text)
@@ -31,7 +33,6 @@ class MainWindow:
         return tab
 
     def refresh_all(self):
-        """Обновление данных во всех вкладках."""
         for name, tab in self.tabs.items():
             try:
                 tab.refresh()
