@@ -79,8 +79,10 @@ CREATE TABLE IF NOT EXISTS "inv_Принтеры" (
 CREATE TABLE IF NOT EXISTS "inv_Сопла" (
 	"id"	INTEGER,
 	"id Типа сопла"	INTEGER NOT NULL,
+	"Группа по соплу"	INTEGER DEFAULT 1, -- НОВОЕ ПОЛЕ
 	"Диаметр (мм)"	REAL NOT NULL DEFAULT 0.4 CHECK("Диаметр (мм)" > 0),
-	"Ресурс (г)"	REAL NOT NULL DEFAULT 0.0 CHECK("Ресурс (г)" >= 0), -- Для эталонного PLA
+	"Ресурс (г)"	REAL NOT NULL DEFAULT 0.0 CHECK("Ресурс (г)" >= 0), 
+	"Название"	TEXT, -- НОВОЕ ПОЛЕ
 	"Примечание"	TEXT,
 	PRIMARY KEY("id" AUTOINCREMENT),
 	FOREIGN KEY("id Типа сопла") REFERENCES "sys_Типы сопел"("id") ON DELETE RESTRICT ON UPDATE CASCADE

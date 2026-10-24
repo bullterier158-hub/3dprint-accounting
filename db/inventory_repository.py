@@ -34,16 +34,16 @@ class InventoryRepository:
             ORDER BY t."Название", n."Диаметр (мм)"
         ''')
 
-    def add_nozzle(self, type_id: int, diameter: float, resource: float) -> bool:
+    def add_nozzle(self, type_id: int, group_id: int, diameter: float, resource: float, name: str) -> bool:
         return self.db.execute(
-            'INSERT INTO "inv_Сопла" ("id Типа сопла", "Диаметр (мм)", "Ресурс (г)") VALUES (?, ?, ?)',
-            (type_id, diameter, resource)
+            'INSERT INTO "inv_Сопла" ("id Типа сопла", "Группа по соплу", "Диаметр (мм)", "Ресурс (г)", "Название") VALUES (?, ?, ?, ?, ?)',
+            (type_id, group_id, diameter, resource, name.strip())
         )
 
-    def update_nozzle(self, n_id: int, type_id: int, diameter: float, resource: float) -> bool:
+    def update_nozzle(self, n_id: int, type_id: int, group_id: int, diameter: float, resource: float, name: str) -> bool:
         return self.db.execute(
-            'UPDATE "inv_Сопла" SET "id Типа сопла"=?, "Диаметр (мм)"=?, "Ресурс (г)"=? WHERE "id"=?',
-            (type_id, diameter, resource, n_id)
+            'UPDATE "inv_Сопла" SET "id Типа сопла"=?, "Группа по соплу"=?, "Диаметр (мм)"=?, "Ресурс (г)"=?, "Название"=? WHERE "id"=?',
+            (type_id, group_id, diameter, resource, name.strip(), n_id)
         )
 
     def delete_nozzle(self, n_id: int) -> bool:

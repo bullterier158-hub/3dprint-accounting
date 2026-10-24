@@ -128,12 +128,13 @@ class InventoryTab(BaseTab):
         tree_frm = ttk.Frame(self.tab_nozzles)
         tree_frm.pack(fill="both", expand=True, padx=10, pady=(10, 5))
 
-        cols = ("Тип", "Диаметр (мм)", "Ресурс (г)")
+        # Добавили "Группа" и "Название"
+        cols = ("Название", "Группа", "Тип", "Диаметр (мм)", "Ресурс (г)")
         self.tree_nozzles = ttk.Treeview(tree_frm, columns=cols, show="headings")
         
         for c in cols:
             self.tree_nozzles.heading(c, text=c)
-            self.tree_nozzles.column(c, width=150, anchor="center")
+            self.tree_nozzles.column(c, width=120, anchor="center")
         
         scroll = ttk.Scrollbar(tree_frm, orient="vertical", command=self.tree_nozzles.yview)
         self.tree_nozzles.configure(yscrollcommand=scroll.set)
@@ -159,7 +160,12 @@ class InventoryTab(BaseTab):
         for i in self.tree_nozzles.get_children(): 
             self.tree_nozzles.delete(i)
         for n in self.db.inventory.get_all_nozzles():
+            # Используем "Название" из БД, если оно есть. Если нет - генерируем старое имя
+            display_name = n["Название"] or f"Сопло {n['Тип']} {fmt_float(n['Диаметр (мм)'])}мм"
+            
             self.tree_nozzles.insert("", "end", iid=str(n["id"]), values=(
+                display_name,
+                n["Группа по соплу"],
                 n["Тип"], 
                 fmt_float(n["Диаметр (мм)"]), 
                 fmt_float(n["Ресурс (г)"])
@@ -168,7 +174,7 @@ class InventoryTab(BaseTab):
     def _nozzle_form(self, n_id=None):
         dialog = tk.Toplevel(self)
         dialog.title("Физическое сопло")
-        dialog.geometry("350x300")
+        dialog.geometry("400x450")
         dialog.grab_set()
 
         types = self.db.settings.get_all_nozzle_types()
@@ -179,11 +185,32 @@ class InventoryTab(BaseTab):
         combo_type.pack(fill="x", padx=20)
         if type_names: combo_type.current(0)
 
+        ttk.Label(dialog, text="Группа по соплу (ID):").pack(pady=(5,2))
+        e_group = ttk.Entry(dialog); e_group.pack(fill="x", padx=20); e_group.insert(0, "1")
+
         ttk.Label(dialog, text="Диаметр (мм):").pack(pady=(5,2))
         e_diam = ttk.Entry(dialog); e_diam.pack(fill="x", padx=20); e_diam.insert(0, "0.4")
         
         ttk.Label(dialog, text="Ресурс (г):").pack(pady=(5,2))
         e_res = ttk.Entry(dialog); e_res.pack(fill="x", padx=20)
+
+        # Поле для названия
+        ttk.Label(dialog, text="Название (автогенерация + можно дописать):").pack(pady=(10,2))
+        e_name = ttk.Entry(dialog); e_name.pack(fill="x", padx=20)
+
+        def generate_name(event=None):
+            """Генерирует базовое название, но не перезаписывает его, если пользователь уже начал вводить свой текст"""
+            current = e_name.get()
+            base_name = f"Сопло {combo_type.get()} {e_diam.get()}мм"
+            
+            # Перезаписываем только если поле пустое или совпадает с предыдущей автогенерацией
+            # (упрощенный вариант: перезаписываем только если пользователь стер всё)
+            if not current.strip():
+                e_name.insert(0, base_name)
+
+        # Привязка событий к полям для автообновления (только если поле пустое)
+        combo_type.bind("<<ComboboxSelected>>", generate_name)
+        e_diam.bind("<FocusOut>", generate_name) 
 
         # Автозаполнение ресурса при выборе типа
         def on_type_select(event=None):
@@ -192,31 +219,53 @@ class InventoryTab(BaseTab):
             if selected_type and selected_type["Ожидаемый ресурс (г)"] is not None:
                 e_res.delete(0, tk.END)
                 e_res.insert(0, fmt_float(selected_type["Ожидаемый ресурс (г)"]))
+            generate_name()
 
         combo_type.bind("<<ComboboxSelected>>", on_type_select)
 
         if not n_id and types:
             on_type_select()
+            generate_name()
+            # Переместим курсор в конец названия для удобства добавления приписки
+            e_name.focus_set()
+            e_name.icursor(tk.END)
 
         if n_id:
             row = next((x for x in self.db.inventory.get_all_nozzles() if x["id"] == n_id), None)
             if row:
                 combo_type.set(row["Тип"])
+                e_group.delete(0, tk.END); e_group.insert(0, str(row["Группа по соплу"]))
                 e_diam.delete(0, tk.END); e_diam.insert(0, fmt_float(row["Диаметр (мм)"]))
                 e_res.delete(0, tk.END); e_res.insert(0, fmt_float(row["Ресурс (г)"]))
+                
+                # Если в БД есть название - ставим его. Если нет - генерируем дефолтное.
+                if row["Название"]:
+                    e_name.insert(0, row["Название"])
+                else:
+                    e_name.insert(0, f"Сопло {row['Тип']} {fmt_float(row['Диаметр (мм)'])}мм")
 
         def save():
             try:
                 type_id = next(t["id"] for t in types if t["Название"] == combo_type.get())
-                ok = self.db.inventory.update_nozzle(n_id, type_id, parse_float(e_diam.get()), parse_float(e_res.get())) if n_id else \
-                     self.db.inventory.add_nozzle(type_id, parse_float(e_diam.get()), parse_float(e_res.get()))
+                group_id = int(e_group.get())
+                
+                if n_id:
+                    ok = self.db.inventory.update_nozzle(
+                        n_id, type_id, group_id, parse_float(e_diam.get()), parse_float(e_res.get()), e_name.get()
+                    )
+                else:
+                    ok = self.db.inventory.add_nozzle(
+                        type_id, group_id, parse_float(e_diam.get()), parse_float(e_res.get()), e_name.get()
+                    )
+
                 if ok:
                     dialog.destroy(); self.refresh()
                 else:
                     messagebox.showerror("Ошибка", "Не удалось сохранить.")
             except (ValueError, StopIteration):
                 messagebox.showerror("Ошибка", "Проверьте числа или выбранный тип.")
-        ttk.Button(dialog, text="Сохранить", command=save).pack(pady=15)
+                
+        ttk.Button(dialog, text="Сохранить", command=save).pack(pady=20)
 
     def _add_nozzle(self): self._nozzle_form()
     def _edit_nozzle(self):
@@ -234,11 +283,13 @@ class InventoryTab(BaseTab):
         tree_frm = ttk.Frame(self.tab_spools)
         tree_frm.pack(fill="both", expand=True, padx=10, pady=(10, 5))
 
-        cols = ("Материал", "Цвет", "Стоимость покупки (руб)", "Вес Нетто (г)", "Остаток (г)", "Статус")
+        # Убрали "Цвет" из этого кортежа
+        cols = ("Материал", "Стоимость покупки (руб)", "Вес Нетто (г)", "Остаток (г)", "Статус")
         self.tree_spools = ttk.Treeview(tree_frm, columns=cols)
         
+        # Настраиваем первую колонку (#0). Делаем её широкой и даем заголовок "Цвет"
         self.tree_spools.heading("#0", text="Цвет")
-        self.tree_spools.column("#0", width=50, anchor="center", stretch=False)
+        self.tree_spools.column("#0", width=150, anchor="center", stretch=False)
         
         for c in cols:
             self.tree_spools.heading(c, text=c)
@@ -285,9 +336,9 @@ class InventoryTab(BaseTab):
                 except tk.TclError:
                     img = ""
 
-            self.tree_spools.insert("", "end", iid=str(s["id"]), image=img, values=(
+            # Картинка и текст передаются в #0 через image= и text=
+            self.tree_spools.insert("", "end", iid=str(s["id"]), image=img, text=s["Цвет"], values=(
                 s["Материал"], 
-                s["Цвет"], 
                 fmt_float(s["Стоимость покупки (руб)"]), 
                 fmt_float(s["Вес Нетто (г)"]),
                 fmt_float(s["Остаток (г)"]),

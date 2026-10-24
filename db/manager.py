@@ -1,9 +1,8 @@
 # db/manager.py
-from pathlib import Path
 from db.connection import DatabaseConnection
 from db.settings_repository import SettingsRepository
 from db.inventory_repository import InventoryRepository
-from config import SCHEMA_PATH, BASE_DIR # Добавили BASE_DIR
+from config import SCHEMA_PATH, SEED_TEST_PATH
 
 class DatabaseManager(DatabaseConnection):
     def __init__(self, db_path: str):
@@ -27,8 +26,7 @@ class DatabaseManager(DatabaseConnection):
         has_printers = self.fetch_scalar('SELECT COUNT(*) FROM "inv_Принтеры"')
         
         if has_printers == 0:
-            seed_test_path = BASE_DIR / "db" / "seed_test.sql"
-            if seed_test_path.exists():
-                with open(seed_test_path, "r", encoding="utf-8") as f:
+            if SEED_TEST_PATH.exists():
+                with open(SEED_TEST_PATH, "r", encoding="utf-8") as f:
                     self.executescript(f.read())
                 print("[DB] Загружены тестовые данные (seed_test.sql)")
